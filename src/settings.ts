@@ -6,4 +6,4 @@ export const PLATFORM_NAME = 'HTHomeServicePlugin';
 /**
  * This must match the name of your plugin as defined the package.json `name` property
  */
-export const PLUGIN_NAME = '@lseeker/homebridge-hthomeservice';
+export const PLUGIN_NAME = '@yylee/homebridge-hthomeservice';

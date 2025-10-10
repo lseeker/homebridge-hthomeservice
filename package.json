@@ -1,5 +1,5 @@
 {
-  "name": "@lseeker/homebridge-hthomeservice",
+  "name": "@yylee/homebridge-hthomeservice",
   "displayName": "Hyundai HT Home Service",
   "type": "module",
   "version": "0.1.0",
