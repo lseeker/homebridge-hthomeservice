@@ -1,0 +1,168 @@
+import got, { type Got } from 'got';
+import { createHash, createCipheriv, randomBytes } from 'node:crypto';
+import { CookieJar } from 'tough-cookie';
+import { Mutex } from 'async-mutex';
+
+const HTSECRET = 'hTsEcret';
+const HTURL = 'https://www2.hthomeservice.com';
+
+const mutex = new Mutex();
+
+function encryptAES(text: string, secret: string) {
+  const salt = randomBytes(8);
+  const passinput = Buffer.concat([Buffer.from(secret, 'binary'), salt]);
+  const hashes = [];
+  let digest = passinput;
+  for (let i = 0; i < 3; i++) {
+    hashes[i] = createHash('md5').update(digest).digest();
+    digest = Buffer.concat([hashes[i], passinput]);
+  }
+  const keyDerivation = Buffer.concat(hashes);
+  const key = keyDerivation.subarray(0, 32);
+  const iv = keyDerivation.subarray(32);
+  const cipher = createCipheriv('aes-256-cbc', key, iv);
+  return Buffer.concat([
+    Buffer.from('Salted__', 'utf8'),
+    salt,
+    cipher.update(text),
+    cipher.final(),
+  ]).toString('base64');
+}
+
+
+export interface HTDevice {
+  id: string
+  deviceType: 'heating'|'light'|'gas'|'aircon'|'wallsocket'|'multi_switch'|'fan'|'elevator'|'eventsender'
+  deviceName: string
+  deviceLocation: string
+  state: 'NORMAL'|'INIT'
+  deviceDetailName: string
+  statusList: []
+}
+
+export interface HTHouseholdResponse {
+  resultCode: '100',
+  resultMessage: string
+  resultData: {
+    danjiList: {
+      siteId: string
+      siteName: string
+      dong: string
+      ho: string
+      isApproved: boolean
+      homepageDomain: string
+      siteAddress: string
+    }[]
+  }
+}
+
+export interface HTDevicesResponse {
+  resultStatus: 'success'
+  transactionId: string
+  data: {
+    deviceList: HTDevice[],
+    totalCount: number
+  }
+}
+
+export interface HTLightOnResponse {
+  resultStatus: 'success'
+  transactionId: string
+  data: {
+    deviceType: 'light'
+    statusList: [
+      {
+        command: 'power',
+        value: 'on'|'off'
+      }
+    ],
+    deviceDetailName: string,
+    id: string,
+    state: 'NORMAL'
+  }
+}
+
+export class HTWebService {
+  private username: string;
+  private password: string;
+  private cookieJar = new CookieJar();
+  private client: Got;
+
+  constructor(username: string, password: string) {
+    this.username = encryptAES( username, HTSECRET);
+    this.password = encryptAES(password, HTSECRET);
+
+    this.client = got.extend({
+      prefixUrl: HTURL,
+      cookieJar: this.cookieJar,
+    });
+  }
+
+  private async postLogin() {
+    return await this.client.post('login', { 
+      json: {
+        id: this.username,
+        password: this.password,
+        rememberMe: false,
+      },
+    });
+  }
+
+  private async postCtocToken() {
+    const household = await this.client.get('proxy/bearer/api/v1/user/danji/household').json<HTHouseholdResponse>();
+    const [danji] = household.resultData.danjiList;
+    if (!danji) {
+      throw new Error('No household found for the user');
+    }
+    return await this.client.post('getctoctoken', { json:
+       {
+         siteId: danji.siteId,
+         dong: danji.dong,
+         ho: danji.ho,
+         clientId: 'HT-WEB',
+         uuid: '',
+       },
+    });
+  }
+
+  private async ensureAuthenticated() {
+    const cookies = this.cookieJar.getCookiesSync(HTURL);
+    const expire = cookies.filter((cookie) => cookie.key === 'connect.sid').map((cookie) => cookie.expires).at(0);
+    if (expire === 'Infinity') {
+      return;
+    }
+    if (expire && expire > new Date()) {
+      return;
+    }
+
+    await mutex.runExclusive(async () => {
+      await this.postLogin();
+      await this.postCtocToken();
+    });
+    await this.ensureAuthenticated();
+  }
+
+  public async getDevices() {
+    await this.ensureAuthenticated();
+    return await this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
+  }
+
+  public async getLightOnState(deviceId: string) {
+    await this.ensureAuthenticated();
+    const response = await this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
+    return response;
+  }
+
+  public async putLightOnState(deviceId: string, on: boolean) {
+    await this.ensureAuthenticated();
+    const response = await this.client.put(`proxy/ctoc/lights/${deviceId}`, { json: {
+      commandList: [ {
+        command: 'power',
+        value: on ? 'on' : 'off',
+      } ],
+    },
+    }).json<HTLightOnResponse>();
+    console.log(JSON.stringify(response));
+    return response.data.statusList[0].value === 'on';
+  }
+}

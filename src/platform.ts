@@ -1,17 +1,36 @@
-import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
-
-import { ExamplePlatformAccessory } from './platformAccessory.js';
+import {
+  Categories,
+  type API, type Characteristic, type DynamicPlatformPlugin,
+  type Logging, type PlatformAccessory, type PlatformConfig, type Service,
+} from 'homebridge';
+import { HTDevice, HTWebService } from './webservice.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 // This is only required when using Custom Services and Characteristics not support by HomeKit
 import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
+
+const HTDeviceTypeToCateogory = {
+  'heating': Categories.AIR_HEATER,
+  'light': Categories.LIGHTBULB,
+  'gas': Categories.SWITCH,
+  'aircon': Categories.AIR_CONDITIONER,
+  'wallsocket': Categories.OUTLET,
+  'multi_switch': Categories.SWITCH,
+  'fan': Categories.FAN,
+  'elevator': Categories.SWITCH,
+  'eventsender': Categories.SECURITY_SYSTEM,
+};
+
+interface HTDeviceContext {
+  device: HTDevice
+}
 
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class HTHomeServicePlugin implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
 
@@ -25,6 +44,8 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public readonly CustomCharacteristics: any;
 
+  private webservice: HTWebService | null = null;
+
   constructor(
     public readonly log: Logging,
     public readonly config: PlatformConfig,
@@ -32,6 +53,15 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
   ) {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
+
+    const { username, password } = config;
+    if (!username || !password) {
+      this.log.warn('Cannot start plugin, username and password are required in configuration');
+      return;
+    }
+
+    this.log.debug('Create HT Web Service');
+    this.webservice = new HTWebService(username, password);
 
     // This is only required when using Custom Services and Characteristics not support by HomeKit
     this.CustomServices = new EveHomeKitTypes(this.api).Services;
@@ -44,8 +74,7 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
-      log.debug('Executed didFinishLaunching callback');
-      // run the method to discover / register your devices as accessories
+      log.debug('Execute didFinishLaunching callback');
       this.discoverDevices();
     });
   }
@@ -61,90 +90,80 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     this.accessories.set(accessory.UUID, accessory);
   }
 
-  /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
-   */
-  discoverDevices() {
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-      {
-        // This is an example of a device which uses a Custom Service
-        exampleUniqueId: 'IJKL',
-        exampleDisplayName: 'Backyard',
-        CustomService: 'AirPressureSensor',
-      },
-    ];
+  async discoverDevices() {
+    this.log.debug('Registering devices...');
 
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
+    const removedAccessories = new Map(this.accessories);
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.accessories.get(uuid);
+    try {
+      const devices = await this.webservice?.getDevices();
+      this.log.debug('Devices: ', JSON.stringify(devices));
 
-      if (existingAccessory) {
-        // the accessory already exists
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+      devices?.data.deviceList.forEach((device) => {
+        const uuid = this.api.hap.uuid.generate(`${device.deviceType}-${device.id}`);
+        const exists = this.accessories.get(uuid);
+        if (exists) {
+          this.log.info('Found cached accessory:', exists.displayName, uuid, exists.category);
+          exists.context.device = device;
+          this.api.updatePlatformAccessories([exists]);
+          removedAccessories.delete(uuid);
+        } else {
+          const displayName = `${device.deviceLocation} ${device.deviceName}`;
+          this.log.info('Adding new accessory:', displayName, uuid, device.deviceType);
+          const accessory = new this.api.platformAccessory<HTDeviceContext>(displayName, uuid, HTDeviceTypeToCateogory[device.deviceType]);
+          accessory.context.device = device;
+          this.accessories.set(uuid, accessory);
+          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        }
+      });
 
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. e.g.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
-
-        // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, existingAccessory);
-
-        // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, e.g.:
-        // remove platform accessories when no longer present
-        // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [existingAccessory]);
-        // this.log.info('Removing existing accessory from cache:', existingAccessory.displayName);
-      } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
-
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
-
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      if (removedAccessories.size === 0) {
+        for (const uuid of removedAccessories.keys()) {
+          this.accessories.delete(uuid);
+        };
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [...removedAccessories.values()]);
       }
 
-      // push into discoveredCacheUUIDs
-      this.discoveredCacheUUIDs.push(uuid);
-    }
+      this.log.debug('Registered accessories:', this.accessories);
 
-    // you can also deal with accessories from the cache which are no longer present by removing them from Homebridge
-    // for example, if your plugin logs into a cloud account to retrieve a device list, and a user has previously removed a device
-    // from this cloud account, then this device will no longer be present in the device list but will still be in the Homebridge cache
-    for (const [uuid, accessory] of this.accessories) {
-      if (!this.discoveredCacheUUIDs.includes(uuid)) {
-        this.log.info('Removing existing accessory from cache:', accessory.displayName);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-      }
+      this.accessories.forEach((accessory) => {
+        switch (accessory.category) {
+        case Categories.LIGHTBULB: {
+          const lightService = accessory.getService(this.Service.Lightbulb) ??
+            accessory.addService(this.Service.Lightbulb, accessory.displayName);
+          const onChar = lightService.getCharacteristic(this.Characteristic.On);
+          onChar.onGet(async () => {
+            this.log.debug('Get Light On State ', accessory.displayName);
+            try {
+              const state = await this.webservice?.getLightOnState(accessory.context.device.id);
+              return state?.data.statusList[0]?.value === 'on';
+            } catch (e) {
+              this.log.error('Failed to get light state: ', e);
+              return false;
+            }
+          });
+          onChar.onSet(async (value) => {
+            this.log.debug('Set Light On State', accessory.displayName, value);
+            try {
+              await this.webservice?.putLightOnState(accessory.context.device.id, value as boolean);
+            } catch (e) {
+              this.log.error('Failed to set light state: ', e);
+            }
+          });
+          break;
+        }
+        case Categories.AIR_CONDITIONER:
+        case Categories.AIR_HEATER:
+        case Categories.FAN:
+        case Categories.OUTLET:
+        case Categories.SECURITY_SYSTEM:
+        case Categories.SWITCH:
+          break;
+        }
+      });
+
+    } catch (e) {
+      this.log.error('Failed to discover devices: ', e);
     }
   }
 }

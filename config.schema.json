@@ -3,15 +3,24 @@
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,
+  "headerDisplay": "Input account information on Hyundai HT Home Service website, at www2.hthomeservice.com",
   "schema": {
     "type": "object",
-    "required": ["name"],
+    "required": ["username", "password"],
     "additionalProperties": false,
     "properties": {
-      "name": {
-        "title": "Name",
+      "username": {
+        "title": "Username",
         "type": "string",
-        "default": "Example Dynamic Platform"
+        "description": "Your Hyundai HT Home Service username"
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "description": "Your Hyundai HT Home Service password",
+        "x-schema-form": {
+          "type": "password"
+        }
       }
     }
   }
