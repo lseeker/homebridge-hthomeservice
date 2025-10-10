@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "HTHomeServicePlugin",
   "pluginType": "platform",
   "singular": true,
   "strictValidation": false,

@@ -1,19 +1,18 @@
 {
-  "name": "homebridge-plugin-name",
-  "displayName": "Plugin Name",
+  "name": "@lseeker/homebridge-hthomeservice",
+  "displayName": "Hyundai HT Home Service",
   "type": "module",
   "version": "1.0.0",
-  "private": true,
-  "description": "A short description about what your plugin does.",
-  "author": "Your Name",
+  "description": "Homebridge plugin using Hyundai HT HomeService web interface",
+  "author": "Yunyoung LEE",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/GITHUB_PROJECT_NAME#readme",
+  "homepage": "https://github.com/lseeker/homebridge-hthomeservice#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME.git"
+    "url": "https://github.com/lseeker/homebridge-hthomeservice.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/GITHUB_PROJECT_NAME/issues"
+    "url": "https://github.com//lseeker/homebridge-hthomeservice/issues"
   },
   "keywords": [
     "homebridge-plugin"
@@ -34,7 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
-    "@types/node": "^24.5.2",
+    "@types/node": "^20.19.20",
     "eslint": "^9.36.0",
     "homebridge": "^2.0.0-beta.30",
     "nodemon": "^3.1.10",
