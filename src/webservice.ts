@@ -1,8 +1,8 @@
-import got, { type Got } from 'got';
-import { createHash, createCipheriv, randomBytes } from 'node:crypto';
-import { CookieJar } from 'tough-cookie';
 import { Mutex } from 'async-mutex';
+import got, { type Got } from 'got';
 import { type Logging } from 'homebridge';
+import { createCipheriv, createHash, randomBytes } from 'node:crypto';
+import { CookieJar } from 'tough-cookie';
 
 const HTSECRET = 'hTsEcret';
 const HTURL = 'https://www2.hthomeservice.com';
@@ -30,13 +30,12 @@ function encryptAES(text: string, secret: string) {
   ]).toString('base64');
 }
 
-
 export interface HTDevice {
   id: string
-  deviceType: 'heating'|'light'|'gas'|'aircon'|'wallsocket'|'multi_switch'|'fan'|'elevator'|'eventsender'
+  deviceType: 'heating' | 'light' | 'gas' | 'aircon' | 'wallsocket' | 'multi_switch' | 'fan' | 'elevator' | 'eventsender'
   deviceName: string
   deviceLocation: string
-  state: 'NORMAL'|'INIT'
+  state: 'NORMAL' | 'INIT'
   deviceDetailName: string
   statusList: []
 }
@@ -74,7 +73,7 @@ export interface HTLightOnResponse {
     statusList: [
       {
         command: 'power',
-        value: 'on'|'off'
+        value: 'on' | 'off'
       }
     ],
     deviceDetailName: string,
@@ -92,7 +91,7 @@ export class HTWebService {
   private expire: Date | null = null;
 
   constructor(username: string, password: string, log: Logging) {
-    this.username = encryptAES( username, HTSECRET);
+    this.username = encryptAES(username, HTSECRET);
     this.password = encryptAES(password, HTSECRET);
     this.log = log;
 
@@ -100,6 +99,13 @@ export class HTWebService {
       prefixUrl: HTURL,
       cookieJar: this.cookieJar,
       hooks: {
+        beforeRequest: [
+          async (options) => {
+            if (!options.context?.onAuthenticate) {
+              await this.ensureAuthenticated();
+            }
+          },
+        ],
         beforeError: [
           (error) => {
             if (error.response?.statusCode === 401) {
@@ -115,11 +121,14 @@ export class HTWebService {
 
   private async postLogin() {
     this.log.info('HTWS: post login');
-    return await this.client.post('login', { 
+    return await this.client.post('login', {
       json: {
         id: this.username,
         password: this.password,
         rememberMe: false,
+      },
+      context: {
+        onAuthenticate: true,
       },
     });
   }
@@ -132,14 +141,17 @@ export class HTWebService {
       throw new Error('No household found for the user');
     }
     this.log.debug('household result: ', JSON.stringify(household.resultData.danjiList));
-    const response = await this.client.post('getctoctoken', { json:
-       {
-         siteId: danji.siteId,
-         dong: danji.dong,
-         ho: danji.ho,
-         clientId: 'HT-WEB',
-         uuid: '',
-       },
+    const response = await this.client.post('getctoctoken', {
+      json: {
+        siteId: danji.siteId,
+        dong: danji.dong,
+        ho: danji.ho,
+        clientId: 'HT-WEB',
+        uuid: '',
+      },
+      context: {
+        onAuthenticate: true,
+      },
     });
     this.updateExpireFromCookie();
     return response;
@@ -188,27 +200,22 @@ export class HTWebService {
 
   public async getDevices() {
     this.log.info('HTWS: get devices');
-    await this.ensureAuthenticated();
     return await this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
   }
-
-  public async getLightOnState(deviceId: string) {
+  public getLightOnState(deviceId: string) {
     this.log.info('HTWS: get light state', deviceId);
-    await this.ensureAuthenticated();
-    const response = await this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
-    return response;
+    return this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
   }
 
-  public async putLightOnState(deviceId: string, on: boolean) {
+  public putLightOnState(deviceId: string, on: boolean) {
     this.log.info('HTWS: put light state', deviceId, on);
-    await this.ensureAuthenticated();
-    const response = await this.client.put(`proxy/ctoc/lights/${deviceId}`, { json: {
-      commandList: [ {
-        command: 'power',
-        value: on ? 'on' : 'off',
-      } ],
-    },
+    return this.client.put(`proxy/ctoc/lights/${deviceId}`, {
+      json: {
+        commandList: [{
+          command: 'power',
+          value: on ? 'on' : 'off',
+        }],
+      },
     }).json<HTLightOnResponse>();
-    return response.data.statusList[0].value === 'on';
   }
 }
