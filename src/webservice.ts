@@ -2,6 +2,7 @@ import got, { type Got } from 'got';
 import { createHash, createCipheriv, randomBytes } from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
 import { Mutex } from 'async-mutex';
+import { type Logging } from 'homebridge';
 
 const HTSECRET = 'hTsEcret';
 const HTURL = 'https://www2.hthomeservice.com';
@@ -87,10 +88,12 @@ export class HTWebService {
   private password: string;
   private cookieJar = new CookieJar();
   private client: Got;
+  private log: Logging;
 
-  constructor(username: string, password: string) {
+  constructor(username: string, password: string, log: Logging) {
     this.username = encryptAES( username, HTSECRET);
     this.password = encryptAES(password, HTSECRET);
+    this.log = log;
 
     this.client = got.extend({
       prefixUrl: HTURL,
@@ -99,6 +102,7 @@ export class HTWebService {
   }
 
   private async postLogin() {
+    this.log.info('HTWS: post login');
     return await this.client.post('login', { 
       json: {
         id: this.username,
@@ -109,11 +113,13 @@ export class HTWebService {
   }
 
   private async postCtocToken() {
+    this.log.info('HTWS: get household');
     const household = await this.client.get('proxy/bearer/api/v1/user/danji/household').json<HTHouseholdResponse>();
     const [danji] = household.resultData.danjiList;
     if (!danji) {
       throw new Error('No household found for the user');
     }
+    this.log.debug('household result: ', JSON.stringify(household.resultData.danjiList));
     return await this.client.post('getctoctoken', { json:
        {
          siteId: danji.siteId,
@@ -135,6 +141,8 @@ export class HTWebService {
       return;
     }
 
+    this.log.info('HTWS: Re-authenticating: expired at ', expire);
+
     await mutex.runExclusive(async () => {
       await this.postLogin();
       await this.postCtocToken();
@@ -143,17 +151,20 @@ export class HTWebService {
   }
 
   public async getDevices() {
+    this.log.info('HTWS: get devices');
     await this.ensureAuthenticated();
     return await this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
   }
 
   public async getLightOnState(deviceId: string) {
+    this.log.info('HTWS: get light state', deviceId);
     await this.ensureAuthenticated();
     const response = await this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
     return response;
   }
 
   public async putLightOnState(deviceId: string, on: boolean) {
+    this.log.info('HTWS: put light state', deviceId, on);
     await this.ensureAuthenticated();
     const response = await this.client.put(`proxy/ctoc/lights/${deviceId}`, { json: {
       commandList: [ {
@@ -162,7 +173,6 @@ export class HTWebService {
       } ],
     },
     }).json<HTLightOnResponse>();
-    console.log(JSON.stringify(response));
     return response.data.statusList[0].value === 'on';
   }
 }

@@ -61,7 +61,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
     }
 
     this.log.debug('Create HT Web Service');
-    this.webservice = new HTWebService(username, password);
+    this.webservice = new HTWebService(username, password, log);
 
     // This is only required when using Custom Services and Characteristics not support by HomeKit
     this.CustomServices = new EveHomeKitTypes(this.api).Services;
