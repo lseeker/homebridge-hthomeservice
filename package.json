@@ -2,7 +2,7 @@
   "name": "@yylee/homebridge-hthomeservice",
   "displayName": "Hyundai HT Home Service",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Homebridge plugin using Hyundai HT HomeService web interface",
   "author": "Yunyoung LEE <progcom@gmail.com>",
   "license": "Apache-2.0",
