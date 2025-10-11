@@ -135,7 +135,11 @@ export class HTWebService {
 
   private async postCtocToken() {
     this.log.info('HTWS: get household');
-    const household = await this.client.get('proxy/bearer/api/v1/user/danji/household').json<HTHouseholdResponse>();
+    const household = await this.client.get('proxy/bearer/api/v1/user/danji/household', {
+      context: {
+        onAuthenticate: true,
+      },
+    }).json<HTHouseholdResponse>();
     const [danji] = household.resultData.danjiList;
     if (!danji) {
       throw new Error('No household found for the user');
@@ -160,6 +164,7 @@ export class HTWebService {
   private updateExpireFromCookie() {
     const cookies = this.cookieJar.getCookiesSync(HTURL);
     const expire = cookies.filter((cookie) => cookie.key === 'connect.sid').map((cookie) => cookie.expires).at(0);
+    this.log.info('HTWS: Session expire at', expire);
     if (expire === null || expire === undefined) {
       this.expire = null;
       return;
