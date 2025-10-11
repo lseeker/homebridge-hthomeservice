@@ -95,7 +95,7 @@ export interface HTFanStateResponse extends HTStateResponse {
       },
       {
         command: 'wind',
-        value: 'stop' | 'light' | 'mid' | 'pow' | 'auto'
+        value: 'stop' | 'light' | 'mid' | 'pow'
       }
     ],
     deviceDetailName: string,
@@ -268,7 +268,7 @@ export class HTWebService {
     }).json<HTFanStateResponse>();
   }
 
-  public putFanWind(deviceId: string, wind: 'auto' | 'light' | 'mid' | 'pow') {
+  public putFanWind(deviceId: string, wind: 'light' | 'mid' | 'pow') {
     this.log.debug('HTWS: put fan wind', deviceId, wind);
     return this.client.put(`proxy/ctoc/fans/${deviceId}`, {
       json: {
