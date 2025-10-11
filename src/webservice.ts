@@ -89,6 +89,7 @@ export class HTWebService {
   private cookieJar = new CookieJar();
   private client: Got;
   private log: Logging;
+  private expire: Date | null = null;
 
   constructor(username: string, password: string, log: Logging) {
     this.username = encryptAES( username, HTSECRET);
@@ -98,6 +99,17 @@ export class HTWebService {
     this.client = got.extend({
       prefixUrl: HTURL,
       cookieJar: this.cookieJar,
+      hooks: {
+        beforeError: [
+          (error) => {
+            if (error.response?.statusCode === 401) {
+              this.log.warn('HTWS: Unauthorized after request, need to re-authenticate', error);
+              this.expire = null;
+            }
+            return error;
+          },
+        ],
+      },
     });
   }
 
@@ -120,7 +132,7 @@ export class HTWebService {
       throw new Error('No household found for the user');
     }
     this.log.debug('household result: ', JSON.stringify(household.resultData.danjiList));
-    return await this.client.post('getctoctoken', { json:
+    const response = await this.client.post('getctoctoken', { json:
        {
          siteId: danji.siteId,
          dong: danji.dong,
@@ -129,21 +141,45 @@ export class HTWebService {
          uuid: '',
        },
     });
+    this.updateExpireFromCookie();
+    return response;
+  }
+
+  private updateExpireFromCookie() {
+    const cookies = this.cookieJar.getCookiesSync(HTURL);
+    const expire = cookies.filter((cookie) => cookie.key === 'connect.sid').map((cookie) => cookie.expires).at(0);
+    if (expire === null || expire === undefined) {
+      this.expire = null;
+      return;
+    }
+    if (expire === 'Infinity') {
+      this.expire = new Date('9999-12-31T23:59:59Z');
+      return;
+    }
+    this.expire = expire;
+  }
+
+  private isExpired() {
+    if (this.expire === null) {
+      return true;
+    }
+    if (this.expire < new Date()) {
+      return true;
+    }
+    return false;
   }
 
   private async ensureAuthenticated() {
-    const cookies = this.cookieJar.getCookiesSync(HTURL);
-    const expire = cookies.filter((cookie) => cookie.key === 'connect.sid').map((cookie) => cookie.expires).at(0);
-    if (expire === 'Infinity') {
+    if (!this.isExpired()) {
       return;
     }
-    if (expire && expire > new Date()) {
-      return;
-    }
-
-    this.log.info('HTWS: Re-authenticating: expired at ', expire);
 
     await mutex.runExclusive(async () => {
+      if (!this.isExpired()) {
+        return true;
+      }
+
+      this.log.info('HTWS: Re-authenticating: expired at ', this.expire);
       await this.postLogin();
       await this.postCtocToken();
     });
