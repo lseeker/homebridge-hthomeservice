@@ -1,13 +1,10 @@
 import {
-  Categories,
+  Categories, HAPStatus,
   type API, type Characteristic, type DynamicPlatformPlugin,
   type Logging, type PlatformAccessory, type PlatformConfig, type Service,
 } from 'homebridge';
-import { HTDevice, HTWebService } from './webservice.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
-
-// This is only required when using Custom Services and Characteristics not support by HomeKit
-import { EveHomeKitTypes } from 'homebridge-lib/EveHomeKitTypes';
+import { HTWebService, type HTDevice } from './webservice.js';
 
 const HTDeviceTypeToCateogory = {
   'heating': Categories.AIR_HEATER,
@@ -35,14 +32,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
 
   // this is used to track restored cached accessories
-  public readonly accessories: Map<string, PlatformAccessory> = new Map();
-  public readonly discoveredCacheUUIDs: string[] = [];
-
-  // This is only required when using Custom Services and Characteristics not support by HomeKit
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public readonly CustomServices: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public readonly CustomCharacteristics: any;
+  public readonly cachedAccessories = new Map<string, PlatformAccessory>();
 
   private webservice: HTWebService | null = null;
 
@@ -62,10 +52,6 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
 
     this.log.debug('Create HT Web Service');
     this.webservice = new HTWebService(username, password, log);
-
-    // This is only required when using Custom Services and Characteristics not support by HomeKit
-    this.CustomServices = new EveHomeKitTypes(this.api).Services;
-    this.CustomCharacteristics = new EveHomeKitTypes(this.api).Characteristics;
 
     this.log.debug('Finished initializing platform:', this.config.name);
 
@@ -87,67 +73,75 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
     this.log.info('Loading accessory from cache:', accessory.displayName);
 
     // add the restored accessory to the accessories cache, so we can track if it has already been registered
-    this.accessories.set(accessory.UUID, accessory);
+    this.cachedAccessories.set(accessory.UUID, accessory);
   }
 
   async discoverDevices() {
-    this.log.debug('Registering devices...');
-
-    const removedAccessories = new Map(this.accessories);
+    this.log.debug('Discover devices...');
 
     try {
-      const devices = await this.webservice?.getDevices();
-      this.log.debug('Devices: ', JSON.stringify(devices));
+      const response = await this.webservice?.getDevices();
+      this.log.debug('Devices response: ', JSON.stringify(response));
 
-      devices?.data.deviceList.forEach((device) => {
+      const newAccessories: PlatformAccessory<HTDeviceContext>[] = [];
+      const updatedAccessories: PlatformAccessory<HTDeviceContext>[] = [];
+
+      response?.data.deviceList.forEach((device) => {
         const uuid = this.api.hap.uuid.generate(`${device.deviceType}-${device.id}`);
-        const exists = this.accessories.get(uuid);
+        const exists = this.cachedAccessories.get(uuid) as PlatformAccessory<HTDeviceContext>;
         if (exists) {
           this.log.info('Found cached accessory:', exists.displayName, uuid, exists.category);
           exists.context.device = device;
-          this.api.updatePlatformAccessories([exists]);
-          removedAccessories.delete(uuid);
+          updatedAccessories.push(exists);
+          this.cachedAccessories.delete(uuid);
         } else {
           const displayName = `${device.deviceLocation} ${device.deviceName}`;
           this.log.info('Adding new accessory:', displayName, uuid, device.deviceType);
           const accessory = new this.api.platformAccessory<HTDeviceContext>(displayName, uuid, HTDeviceTypeToCateogory[device.deviceType]);
           accessory.context.device = device;
-          this.accessories.set(uuid, accessory);
-          this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+          newAccessories.push(accessory);
         }
       });
 
-      if (removedAccessories.size === 0) {
-        for (const uuid of removedAccessories.keys()) {
-          this.accessories.delete(uuid);
-        };
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [...removedAccessories.values()]);
+      if (newAccessories.length > 0) {
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, newAccessories);
+      }
+      if (updatedAccessories.length > 0) {
+        this.api.updatePlatformAccessories(updatedAccessories);
+      }
+      if (this.cachedAccessories.size > 0) {
+        const removedAccessories = [...this.cachedAccessories.values()];
+        this.log.debug('Remove cached accessories:', removedAccessories);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, removedAccessories);
+        this.cachedAccessories.clear();
       }
 
-      this.log.debug('Registered accessories:', this.accessories);
+      const discoveredAccessories = newAccessories.concat(updatedAccessories);
+      this.log.info('Discovered accessories:', discoveredAccessories);
 
-      this.accessories.forEach((accessory) => {
+      discoveredAccessories.forEach((accessory) => {
         switch (accessory.category) {
         case Categories.LIGHTBULB: {
           const lightService = accessory.getService(this.Service.Lightbulb) ??
-            accessory.addService(this.Service.Lightbulb, accessory.displayName);
+              accessory.addService(this.Service.Lightbulb, accessory.displayName);
           const onChar = lightService.getCharacteristic(this.Characteristic.On);
           onChar.onGet(async () => {
             this.log.debug('Get Light On State ', accessory.displayName);
             try {
-              const state = await this.webservice?.getLightOnState(accessory.context.device.id);
-              return state?.data.statusList[0]?.value === 'on';
+              const response = await this.webservice!.getLightOnState(accessory.context.device.id);
+              return response.data.statusList[0]?.value === 'on';
             } catch (e) {
               this.log.error('Failed to get light state: ', e);
-              return false;
+              throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
             }
           });
           onChar.onSet(async (value) => {
             this.log.debug('Set Light On State', accessory.displayName, value);
             try {
-              await this.webservice?.putLightOnState(accessory.context.device.id, value as boolean);
+              await this.webservice!.putLightOnState(accessory.context.device.id, value as boolean);
             } catch (e) {
               this.log.error('Failed to set light state: ', e);
+              throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
             }
           });
           break;
@@ -163,7 +157,8 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       });
 
     } catch (e) {
-      this.log.error('Failed to discover devices: ', e);
+      this.log.error('Failed to discover devices:' , e);
+      throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
 }
