@@ -65,15 +65,37 @@ export interface HTDevicesResponse {
   }
 }
 
-export interface HTLightOnResponse {
+export interface HTStateResponse {
   resultStatus: 'success'
   transactionId: string
+}
+
+export interface HTLightStateResponse extends HTStateResponse {
   data: {
     deviceType: 'light'
     statusList: [
       {
         command: 'power',
         value: 'on' | 'off'
+      }
+    ],
+    deviceDetailName: string
+    id: string
+    state: 'NORMAL'
+  }
+}
+
+export interface HTFanStateResponse extends HTStateResponse {
+  data: {
+    deviceType: 'fan'
+    statusList: [
+      {
+        command: 'power',
+        value: 'on' | 'off'
+      },
+      {
+        command: 'wind',
+        value: 'stop' | 'light' | 'mid' | 'pow' | 'auto'
       }
     ],
     deviceDetailName: string,
@@ -212,20 +234,49 @@ export class HTWebService {
     return this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
   }
 
-  public getLightOnState(deviceId: string) {
+  public getLightState(deviceId: string) {
     this.log.debug('HTWS: get light state', deviceId);
-    return this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
+    return this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightStateResponse>();
   }
 
-  public putLightOnState(deviceId: string, on: boolean) {
-    this.log.debug('HTWS: put light state', deviceId, on);
+  public putLightPower(deviceId: string, power: boolean) {
+    this.log.debug('HTWS: put light power', deviceId, power);
     return this.client.put(`proxy/ctoc/lights/${deviceId}`, {
       json: {
         commandList: [{
           command: 'power',
-          value: on ? 'on' : 'off',
+          value: power ? 'on' : 'off',
         }],
       },
-    }).json<HTLightOnResponse>();
+    }).json<HTLightStateResponse>();
+  }
+
+  public getFanState(deviceId: string) {
+    this.log.debug('HTWS: get fan state', deviceId);
+    return this.client.get(`proxy/ctoc/fans/${deviceId}`).json<HTFanStateResponse>();
+  }
+
+  public putFanPower(deviceId: string, power: boolean) {
+    this.log.debug('HTWS: put fan power', deviceId, power);
+    return this.client.put(`proxy/ctoc/fans/${deviceId}`, {
+      json: {
+        commandList: [{
+          command: 'power',
+          value: power ? 'on' : 'off',
+        }],
+      },
+    }).json<HTFanStateResponse>();
+  }
+
+  public putFanWind(deviceId: string, wind: 'auto' | 'light' | 'mid' | 'pow') {
+    this.log.debug('HTWS: put fan wind', deviceId, wind);
+    return this.client.put(`proxy/ctoc/fans/${deviceId}`, {
+      json: {
+        commandList: [{
+          command: 'wind',
+          value: wind,
+        }],
+      },
+    }).json<HTFanStateResponse>();
   }
 }

@@ -3,6 +3,7 @@ import {
   type API, type Characteristic, type DynamicPlatformPlugin,
   type Logging, type PlatformAccessory, type PlatformConfig, type Service,
 } from 'homebridge';
+import { HTFanAccessory } from './accessories/fan.js';
 import { HTLightAccessory } from './accessories/light.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { HTWebService, type HTDevice } from './webservice.js';
@@ -14,7 +15,7 @@ const HTDeviceTypeToCateogory = {
   'aircon': Categories.AIR_CONDITIONER,
   'wallsocket': Categories.OUTLET,
   'multi_switch': Categories.SWITCH,
-  'fan': Categories.FAN,
+  'fan': Categories.AIR_PURIFIER, // 전열교환기
   'elevator': Categories.SWITCH,
   'eventsender': Categories.SECURITY_SYSTEM,
 };
@@ -118,16 +119,17 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       }
 
       const discoveredAccessories = newAccessories.concat(updatedAccessories);
-      this.log.debug('Discovered accessories:', discoveredAccessories);
 
       discoveredAccessories.forEach((accessory) => {
         switch (accessory.category) {
         case Categories.LIGHTBULB:
           new HTLightAccessory(accessory, this.log, this.api, this.webservice!);
           break;
+        case Categories.AIR_PURIFIER:
+          new HTFanAccessory(accessory, this.log, this.api, this.webservice!);
+          break;
         case Categories.AIR_CONDITIONER:
         case Categories.AIR_HEATER:
-        case Categories.FAN:
         case Categories.OUTLET:
         case Categories.SECURITY_SYSTEM:
         case Categories.SWITCH:

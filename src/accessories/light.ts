@@ -1,5 +1,5 @@
 import { HAPStatus, type API, type Characteristic, type Logging, type PlatformAccessory } from 'homebridge';
-import { HTLightOnResponse, HTWebService } from '../webservice.js';
+import { HTWebService, type HTLightStateResponse } from '../webservice.js';
 
 export class HTLightAccessory {
   private log: Logging;
@@ -14,25 +14,24 @@ export class HTLightAccessory {
     const { Service, Characteristic } = api.hap;
 
     const lightService = accessory.getService(Service.Lightbulb) ??
-            accessory.addService(Service.Lightbulb, accessory.displayName);
+      accessory.addService(Service.Lightbulb, accessory.displayName);
     this.onCharacteristic = lightService.getCharacteristic(Characteristic.On);
 
     this.onCharacteristic.onGet(() => {
-      this.log.info('Get Light On State', this.displayName);
+      this.log.info('Get light on state', this.displayName);
       (async () => {
         try {
-          const response = await webservice.getLightOnState(accessory.context.device.id);
+          const response = await webservice.getLightState(accessory.context.device.id);
           this.updateValueByResponse(response);
         } catch (e) {
           this.log.error('Failed to get light on state:', e);
         }
       })();
       return this.on;
-    });
-    this.onCharacteristic.onSet(async (value) => {
-      this.log.info('Set Light On State', this.displayName, value);
+    }).onSet(async (value) => {
+      this.log.info('Set light on state', this.displayName, value);
       try {
-        const response = await webservice.putLightOnState(accessory.context.device.id, value as boolean);
+        const response = await webservice.putLightPower(accessory.context.device.id, value as boolean);
         this.updateValueByResponse(response);
       } catch (e) {
         this.log.error('Failed to set light on state:', e);
@@ -41,9 +40,9 @@ export class HTLightAccessory {
     });
   }
 
-  private updateValueByResponse(response: HTLightOnResponse) {
+  private updateValueByResponse(response: HTLightStateResponse) {
     this.on = response.data.statusList[0]?.value === 'on';
-    this.log.debug('Update Light On value', this.displayName, this.on);
+    this.log.debug('Update light on value', this.displayName, this.on);
     this.onCharacteristic.updateValue(this.on);
   }
 }
