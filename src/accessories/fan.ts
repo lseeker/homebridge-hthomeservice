@@ -1,5 +1,5 @@
 import { Mutex } from 'async-mutex';
-import { Characteristic, HAPStatus, type API, type Logging, type PlatformAccessory } from 'homebridge';
+import { Characteristic, type API, type Logging, type PlatformAccessory } from 'homebridge';
 import { HTWebService, type HTFanStateResponse } from '../webservice.js';
 
 const mutex = new Mutex();
@@ -66,7 +66,6 @@ export class HTFanAccessory {
       if (value === Characteristic.TargetAirPurifierState.AUTO) {
         // const response = await webservice.putFanWind(this.deviceId, 'auto');
         // this.updateValueByResponse(response);
-        throw new api.hap.HapStatusError(HAPStatus.READ_ONLY_CHARACTERISTIC);
       } else {
         this.targetState = value as number;
         await this.setRotationSpeed(this.rotationSpeed);
@@ -87,7 +86,7 @@ export class HTFanAccessory {
       return;
     }
     try {
-      mutex.acquire();
+      await mutex.acquire();
       if (this.loading) {
         return;
       }
