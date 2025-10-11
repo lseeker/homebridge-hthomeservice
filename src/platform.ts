@@ -3,6 +3,7 @@ import {
   type API, type Characteristic, type DynamicPlatformPlugin,
   type Logging, type PlatformAccessory, type PlatformConfig, type Service,
 } from 'homebridge';
+import { HTLightAccessory } from './accessories/light.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import { HTWebService, type HTDevice } from './webservice.js';
 
@@ -121,31 +122,9 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
 
       discoveredAccessories.forEach((accessory) => {
         switch (accessory.category) {
-        case Categories.LIGHTBULB: {
-          const lightService = accessory.getService(this.Service.Lightbulb) ??
-              accessory.addService(this.Service.Lightbulb, accessory.displayName);
-          const onChar = lightService.getCharacteristic(this.Characteristic.On);
-          onChar.onGet(async () => {
-            this.log.info('Get Light On State', accessory.displayName);
-            try {
-              const response = await this.webservice!.getLightOnState(accessory.context.device.id);
-              return response.data.statusList[0]?.value === 'on';
-            } catch (e) {
-              this.log.error('Failed to get light state:', e);
-              throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-            }
-          });
-          onChar.onSet(async (value) => {
-            this.log.info('Set Light On State', accessory.displayName, value);
-            try {
-              await this.webservice!.putLightOnState(accessory.context.device.id, value as boolean);
-            } catch (e) {
-              this.log.error('Failed to set light state:', e);
-              throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-            }
-          });
+        case Categories.LIGHTBULB:
+          new HTLightAccessory(accessory, this.log, this.api, this.webservice!);
           break;
-        }
         case Categories.AIR_CONDITIONER:
         case Categories.AIR_HEATER:
         case Categories.FAN:
