@@ -77,7 +77,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
   }
 
   async discoverDevices() {
-    this.log.debug('Discover devices...');
+    this.log.info('Discover devices...');
 
     try {
       const response = await this.webservice?.getDevices();
@@ -111,13 +111,13 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       }
       if (this.cachedAccessories.size > 0) {
         const removedAccessories = [...this.cachedAccessories.values()];
-        this.log.debug('Remove cached accessories:', removedAccessories);
+        this.log.info('Remove cached accessories:', removedAccessories);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, removedAccessories);
         this.cachedAccessories.clear();
       }
 
       const discoveredAccessories = newAccessories.concat(updatedAccessories);
-      this.log.info('Discovered accessories:', discoveredAccessories);
+      this.log.debug('Discovered accessories:', discoveredAccessories);
 
       discoveredAccessories.forEach((accessory) => {
         switch (accessory.category) {
@@ -126,21 +126,21 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
               accessory.addService(this.Service.Lightbulb, accessory.displayName);
           const onChar = lightService.getCharacteristic(this.Characteristic.On);
           onChar.onGet(async () => {
-            this.log.debug('Get Light On State ', accessory.displayName);
+            this.log.info('Get Light On State', accessory.displayName);
             try {
               const response = await this.webservice!.getLightOnState(accessory.context.device.id);
               return response.data.statusList[0]?.value === 'on';
             } catch (e) {
-              this.log.error('Failed to get light state: ', e);
+              this.log.error('Failed to get light state:', e);
               throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
             }
           });
           onChar.onSet(async (value) => {
-            this.log.debug('Set Light On State', accessory.displayName, value);
+            this.log.info('Set Light On State', accessory.displayName, value);
             try {
               await this.webservice!.putLightOnState(accessory.context.device.id, value as boolean);
             } catch (e) {
-              this.log.error('Failed to set light state: ', e);
+              this.log.error('Failed to set light state:', e);
               throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
             }
           });
@@ -157,7 +157,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       });
 
     } catch (e) {
-      this.log.error('Failed to discover devices:' , e);
+      this.log.error('Failed to discover devices:', e);
       throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }

@@ -1,5 +1,5 @@
 import { Mutex } from 'async-mutex';
-import got, { type Got } from 'got';
+import got, { type Got, type Options } from 'got';
 import { type Logging } from 'homebridge';
 import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
@@ -102,7 +102,8 @@ export class HTWebService {
         beforeRequest: [
           async (options) => {
             if (!options.context?.onAuthenticate) {
-              await this.ensureAuthenticated();
+              // on current request, cookie not set by cookieJar. so set by ensure authenticate.
+              await this.ensureAuthenticated(options);
             }
           },
         ],
@@ -120,7 +121,7 @@ export class HTWebService {
   }
 
   private async postLogin() {
-    this.log.info('HTWS: post login');
+    this.log.debug('HTWS: post login');
     return await this.client.post('login', {
       json: {
         id: this.username,
@@ -134,7 +135,7 @@ export class HTWebService {
   }
 
   private async postCtocToken() {
-    this.log.info('HTWS: get household');
+    this.log.debug('HTWS: get household');
     const household = await this.client.get('proxy/bearer/api/v1/user/danji/household', {
       context: {
         onAuthenticate: true,
@@ -144,7 +145,7 @@ export class HTWebService {
     if (!danji) {
       throw new Error('No household found for the user');
     }
-    this.log.debug('household result: ', JSON.stringify(household.resultData.danjiList));
+    this.log.debug('HTWS: household result: ', JSON.stringify(household.resultData.danjiList));
     const response = await this.client.post('getctoctoken', {
       json: {
         siteId: danji.siteId,
@@ -186,7 +187,7 @@ export class HTWebService {
     return false;
   }
 
-  private async ensureAuthenticated() {
+  private async ensureAuthenticated(options?: Options) {
     if (!this.isExpired()) {
       return;
     }
@@ -196,24 +197,28 @@ export class HTWebService {
         return true;
       }
 
-      this.log.info('HTWS: Re-authenticating: expired at ', this.expire);
+      this.log.info('HTWS: Re-authenticating: expired at', this.expire);
       await this.postLogin();
       await this.postCtocToken();
     });
     await this.ensureAuthenticated();
+    if (options) {
+      options.headers.cookie = this.cookieJar.getCookieStringSync(HTURL);
+    }
   }
 
-  public async getDevices() {
-    this.log.info('HTWS: get devices');
-    return await this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
+  public getDevices() {
+    this.log.debug('HTWS: get devices');
+    return this.client.get('proxy/ctoc/devices').json<HTDevicesResponse>();
   }
+
   public getLightOnState(deviceId: string) {
-    this.log.info('HTWS: get light state', deviceId);
+    this.log.debug('HTWS: get light state', deviceId);
     return this.client.get(`proxy/ctoc/lights/${deviceId}`).json<HTLightOnResponse>();
   }
 
   public putLightOnState(deviceId: string, on: boolean) {
-    this.log.info('HTWS: put light state', deviceId, on);
+    this.log.debug('HTWS: put light state', deviceId, on);
     return this.client.put(`proxy/ctoc/lights/${deviceId}`, {
       json: {
         commandList: [{
