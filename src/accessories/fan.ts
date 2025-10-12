@@ -136,7 +136,9 @@ export class HTFanAccessory {
     switch (wind) {
     case 'stop':
       this.rotationSpeed = 0;
-      this.targetState = this.Characteristic.TargetAirPurifierState.AUTO;
+      if (this.active === this.Characteristic.Active.ACTIVE) {
+        this.targetState = this.Characteristic.TargetAirPurifierState.AUTO;
+      }
       break;
     case 'light':
       this.rotationSpeed = 30;
