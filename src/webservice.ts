@@ -70,15 +70,15 @@ export interface HTStateResponse {
   transactionId: string
 }
 
+export interface HTStatusPower {
+  command: 'power'
+  value: 'on' | 'off'
+}
+
 export interface HTLightStateResponse extends HTStateResponse {
   data: {
     deviceType: 'light'
-    statusList: [
-      {
-        command: 'power',
-        value: 'on' | 'off'
-      }
-    ],
+    statusList: [HTStatusPower]
     deviceDetailName: string
     id: string
     state: 'NORMAL'
@@ -89,18 +89,48 @@ export interface HTFanStateResponse extends HTStateResponse {
   data: {
     deviceType: 'fan'
     statusList: [
+      HTStatusPower,
       {
-        command: 'power',
-        value: 'on' | 'off'
-      },
-      {
-        command: 'wind',
+        command: 'wind'
         value: 'stop' | 'light' | 'mid' | 'pow'
       }
     ],
     deviceDetailName: string,
     id: string,
     state: 'NORMAL'
+  }
+}
+
+export interface HTHeatingStateResponse extends HTStateResponse {
+  data: {
+    deviceType: 'heating'
+    statusList: [
+      HTStatusPower,
+      {
+        command: 'reservationType'
+        value: 'none'
+      },
+      {
+        command: 'mode'
+        value: 'in'
+      },
+      {
+        command: 'errorCode'
+        value: '0'
+      },
+      {
+        command: 'currTemperature'
+        value: string
+      },
+      {
+        command: 'setTemperature',
+        value: string
+      },
+      {
+        command: 'flowValueOpenClose'
+        value: 'close' | 'open'
+      }
+    ]
   }
 }
 
@@ -297,5 +327,10 @@ export class HTWebService {
         }],
       },
     }).json<HTFanStateResponse>();
+  }
+
+  public getHeaterState(deviceId: string) {
+    this.log.debug('HTWS: get heater state', deviceId);
+    return this.client.get(`proxy/ctoc/heaters/${deviceId}`).json<HTHeatingStateResponse>();
   }
 }
