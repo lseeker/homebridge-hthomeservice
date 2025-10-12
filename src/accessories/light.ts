@@ -21,13 +21,13 @@ export class HTLightAccessory {
       });
 
     this.onCharacteristic.onGet(() => {
-      this.log.info('Get light on state', this.displayName, this.onCharacteristic.value);
+      this.log.debug('Get light on state', this.displayName, this.onCharacteristic.value);
       (async () => {
         try {
           const response = await webservice.getLightState(accessory.context.device.id);
           this.updateValueByResponse(response);
         } catch (e) {
-          this.log.error('Failed to get light on state:', e);
+          this.log.error('Failed to get light on state', e);
         }
       })();
       return this.onCharacteristic.value;
@@ -38,7 +38,7 @@ export class HTLightAccessory {
         const power = response.data.statusList[0]?.value === 'on';
         return power;
       } catch (e) {
-        this.log.error('Failed to set light on state:', e);
+        this.log.error('Failed to set light on state', e);
         throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
       }
     });
@@ -46,7 +46,7 @@ export class HTLightAccessory {
 
   private updateValueByResponse(response: HTLightStateResponse) {
     const power = response.data.statusList[0]?.value === 'on';
-    this.log.info('Update light on value', this.displayName, power);
     this.onCharacteristic.updateValue(power);
+    this.log.info('Updated light on value', this.displayName, power);
   }
 }

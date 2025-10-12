@@ -145,7 +145,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       });
 
     } catch (e) {
-      this.log.error('Failed to discover devices:', e);
+      this.log.error('Failed to discover devices', e);
       throw new this.api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }

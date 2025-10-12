@@ -265,12 +265,16 @@ export class HTWebService {
 
     await mutex.runExclusive(async () => {
       if (!this.isExpired()) {
-        return true;
+        return;
       }
 
       this.log.info('HTWS: Re-authenticating: expired at', this.expire);
-      await this.postLogin();
-      await this.postCtocToken();
+      try {
+        await this.postLogin();
+        await this.postCtocToken();
+      } catch (e) {
+        this.log.error('HTWS: Error on authenticating', e);
+      }
     });
     await this.ensureAuthenticated();
     if (options) {

@@ -1,5 +1,5 @@
 import { Mutex } from 'async-mutex';
-import { Characteristic, type API, type Logging, type PlatformAccessory } from 'homebridge';
+import { Characteristic, HAPStatus, type API, type Logging, type PlatformAccessory } from 'homebridge';
 import { HTWebService, type HTFanStateResponse } from '../webservice.js';
 
 const mutex = new Mutex();
@@ -47,8 +47,13 @@ export class HTFanAccessory {
     }).onSet(async (value) => {
       this.log.info('Set air purifier active', this.displayName, value);
       this.targetStateCharacteristic.updateValue(Characteristic.TargetAirPurifierState.MANUAL);
-      const response = await webservice.putFanPower(this.deviceId, value === Characteristic.Active.ACTIVE);
-      this.updateValueByResponse(response);
+      try {
+        const response = await webservice.putFanPower(this.deviceId, value === Characteristic.Active.ACTIVE);
+        this.updateValueByResponse(response);
+      } catch (e) {
+        this.log.error('Failed to set air purifier active', e);
+        throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
     });
 
     this.currentStateCharacteristic.onGet(() => {
@@ -64,8 +69,13 @@ export class HTFanAccessory {
         // const response = await webservice.putFanWind(this.deviceId, 'auto');
         // this.updateValueByResponse(response);
       } else {
-        this.targetStateCharacteristic.updateValue(value);
-        await this.setRotationSpeed(this.rotationSpeedCharacteristic.value as number);
+        try {
+          this.targetStateCharacteristic.updateValue(value);
+          await this.setRotationSpeed(this.rotationSpeedCharacteristic.value as number);
+        } catch (e) {
+          this.log.error('Failed to set air purifier target state', e);
+          throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+        }
       }
     });
 
@@ -73,8 +83,13 @@ export class HTFanAccessory {
       (async () => this.loadValues())();
       return this.rotationSpeedCharacteristic.value;
     }).onSet(async (value) => {
-      this.log.info('Set air purifier rotation speed', this.displayName, value);
-      await this.setRotationSpeed(value as number);
+      try {
+        this.log.info('Set air purifier rotation speed', this.displayName, value);
+        await this.setRotationSpeed(value as number);
+      } catch (e) {
+        this.log.error('Failed to set air purifier rotation speed', e);
+        throw new api.hap.HapStatusError(HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+      }
     });
   }
 
@@ -93,11 +108,11 @@ export class HTFanAccessory {
     }
 
     try {
-      this.log.info('Get air purifier state', this.displayName);
+      this.log.debug('Get air purifier state', this.displayName);
       const response = await this.webservice.getFanState(this.deviceId);
       this.updateValueByResponse(response);
     } catch (e) {
-      this.log.error('Failed to get air purifier state:', e);
+      this.log.error('Failed to get air purifier state', e);
     } finally {
       this.loading = false;
     }
@@ -148,7 +163,7 @@ export class HTFanAccessory {
       break;
     }
 
-    this.log.debug('Updated air purifier values',
+    this.log.info('Updated air purifier values',
       this.displayName,
       this.activeCharacteristic.value,
       this.currentStateCharacteristic.value,
