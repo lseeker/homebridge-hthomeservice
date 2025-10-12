@@ -20,6 +20,8 @@ const HTDeviceTypeToCateogory = {
   'eventsender': Categories.SECURITY_SYSTEM,
 };
 
+const SupportedDeviceTypes = ['light', 'fan'];
+
 interface HTDeviceContext {
   device: HTDevice
 }
@@ -90,6 +92,11 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
 
       response?.data.deviceList.forEach((device) => {
         const uuid = this.api.hap.uuid.generate(`${device.deviceType}-${device.id}`);
+
+        if (!SupportedDeviceTypes.includes(device.deviceType)) {
+          return;
+        }
+
         const exists = this.cachedAccessories.get(uuid) as PlatformAccessory<HTDeviceContext>;
         if (exists) {
           this.log.info('Found cached accessory:', exists.displayName, uuid, exists.category);
