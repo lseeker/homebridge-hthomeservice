@@ -120,7 +120,7 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       }
       if (this.cachedAccessories.size > 0) {
         const removedAccessories = [...this.cachedAccessories.values()];
-        this.log.info('Remove cached accessories:', removedAccessories);
+        this.log.info('Remove cached accessories:', removedAccessories.map((accessory) => accessory.displayName));
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, removedAccessories);
         this.cachedAccessories.clear();
       }
