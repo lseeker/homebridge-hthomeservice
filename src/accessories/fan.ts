@@ -16,11 +16,6 @@ export class HTFanAccessory {
   private targetStateCharacteristic: Characteristic;
   private rotationSpeedCharacteristic: Characteristic;
 
-  private active;
-  private currentState;
-  private targetState;
-  private rotationSpeed;
-
   private loading = false;
 
   constructor(accessory: PlatformAccessory, log: Logging, api: API, webservice: HTWebService) {
@@ -32,49 +27,51 @@ export class HTFanAccessory {
     const { Service, Characteristic } = api.hap;
 
     this.Characteristic = Characteristic;
-    this.active = Characteristic.Active.INACTIVE;
-    this.currentState = Characteristic.CurrentAirPurifierState.INACTIVE;
-    this.targetState = Characteristic.TargetAirPurifierState.MANUAL;
-    this.rotationSpeed = 0;
 
     const airPurifierService = accessory.getService(Service.AirPurifier) ??
       accessory.addService(Service.AirPurifier, accessory.displayName);
-    this.activeCharacteristic = airPurifierService.getCharacteristic(Characteristic.Active);
-    this.currentStateCharacteristic = airPurifierService.getCharacteristic(Characteristic.CurrentAirPurifierState);
-    this.targetStateCharacteristic = airPurifierService.getCharacteristic(Characteristic.TargetAirPurifierState);
-    this.rotationSpeedCharacteristic = airPurifierService.getCharacteristic(Characteristic.RotationSpeed);
+    this.activeCharacteristic = airPurifierService.getCharacteristic(Characteristic.Active)
+      .updateValue(Characteristic.Active.INACTIVE);
+    this.currentStateCharacteristic = airPurifierService.getCharacteristic(Characteristic.CurrentAirPurifierState)
+      .updateValue(Characteristic.CurrentAirPurifierState.INACTIVE);
+    this.targetStateCharacteristic = airPurifierService.getCharacteristic(Characteristic.TargetAirPurifierState)
+      .updateValue(Characteristic.TargetAirPurifierState.MANUAL);
+    this.rotationSpeedCharacteristic = airPurifierService.getCharacteristic(Characteristic.RotationSpeed)
+      .updateValue(0).setProps({
+        validValues: [0, 30, 60, 100],
+      });
 
     this.activeCharacteristic.onGet(() => {
       (async () => this.loadValues())();
-      return this.active;
+      return this.activeCharacteristic.value;
     }).onSet(async (value) => {
       this.log.info('Set air purifier active', this.displayName, value);
-      this.targetState = Characteristic.TargetAirPurifierState.MANUAL;
+      this.targetStateCharacteristic.updateValue(Characteristic.TargetAirPurifierState.MANUAL);
       const response = await webservice.putFanPower(this.deviceId, value === Characteristic.Active.ACTIVE);
       this.updateValueByResponse(response);
     });
 
     this.currentStateCharacteristic.onGet(() => {
       (async () => this.loadValues())();
-      return this.currentState;
+      return this.currentStateCharacteristic.value;
     });
 
     this.targetStateCharacteristic.onGet(() => {
-      return this.targetState;
+      return this.targetStateCharacteristic.value;
     }).onSet(async (value) => {
       this.log.info('Set air purifier target state', this.displayName, value);
       if (value === Characteristic.TargetAirPurifierState.AUTO) {
         // const response = await webservice.putFanWind(this.deviceId, 'auto');
         // this.updateValueByResponse(response);
       } else {
-        this.targetState = value as number;
-        await this.setRotationSpeed(this.rotationSpeed);
+        this.targetStateCharacteristic.updateValue(value);
+        await this.setRotationSpeed(this.rotationSpeedCharacteristic.value as number);
       }
     });
 
     this.rotationSpeedCharacteristic.onGet(() => {
       (async () => this.loadValues())();
-      return this.rotationSpeed;
+      return this.rotationSpeedCharacteristic.value;
     }).onSet(async (value) => {
       this.log.info('Set air purifier rotation speed', this.displayName, value);
       await this.setRotationSpeed(value as number);
@@ -122,40 +119,40 @@ export class HTFanAccessory {
     const wind = response.data.statusList.find((status) => status.command === 'wind')?.value ?? 'stop';
 
     if (power === 'on') {
-      this.active = this.Characteristic.Active.ACTIVE;
+      this.activeCharacteristic.updateValue(this.Characteristic.Active.ACTIVE);
       if (wind === 'stop') {
-        this.currentState = this.Characteristic.CurrentAirPurifierState.IDLE;
+        this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.IDLE);
       } else {
-        this.currentState = this.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
+        this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.PURIFYING_AIR);
       }
     } else {
-      this.active = this.Characteristic.Active.INACTIVE;
-      this.currentState = this.Characteristic.CurrentAirPurifierState.INACTIVE;
+      this.activeCharacteristic.updateValue(this.Characteristic.Active.INACTIVE);
+      this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.INACTIVE);
     }
 
     switch (wind) {
     case 'stop':
-      this.rotationSpeed = 0;
-      if (this.active === this.Characteristic.Active.ACTIVE) {
-        this.targetState = this.Characteristic.TargetAirPurifierState.AUTO;
+      this.rotationSpeedCharacteristic.updateValue(0);
+      if (this.activeCharacteristic.value === this.Characteristic.Active.ACTIVE) {
+        this.targetStateCharacteristic.updateValue(this.Characteristic.TargetAirPurifierState.AUTO);
       }
       break;
     case 'light':
-      this.rotationSpeed = 30;
+      this.rotationSpeedCharacteristic.updateValue(30);
       break;
     case 'mid':
-      this.rotationSpeed = 60;
+      this.rotationSpeedCharacteristic.updateValue(60);
       break;
     case 'pow':
-      this.rotationSpeed = 100;
+      this.rotationSpeedCharacteristic.updateValue(100);
       break;
     }
 
-    this.log.debug('Update air purifier values', this.displayName, this.active, this.currentState, this.targetState, this.rotationSpeed);
-
-    this.activeCharacteristic.updateValue(this.active);
-    this.currentStateCharacteristic.updateValue(this.currentState);
-    this.targetStateCharacteristic.updateValue(this.targetState);
-    this.rotationSpeedCharacteristic.updateValue(this.rotationSpeed);
+    this.log.debug('Updated air purifier values',
+      this.displayName,
+      this.activeCharacteristic.value,
+      this.currentStateCharacteristic.value,
+      this.targetStateCharacteristic.value,
+      this.rotationSpeedCharacteristic.value);
   }
 }
