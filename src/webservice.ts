@@ -142,7 +142,7 @@ export class HTWebService {
         beforeRetry: [
           async (error) => {
             if (error.response?.statusCode === 401) {
-              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate', error.request?.requestUrl?.pathname);
+              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate (retry)', error.request?.requestUrl?.pathname);
               this.expire = null;
               await this.ensureAuthenticated();
             }
@@ -151,7 +151,7 @@ export class HTWebService {
         beforeError: [
           (error) => {
             if (error.response?.statusCode === 401) {
-              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate', error.request?.requestUrl?.pathname);
+              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate (error)', error.request?.requestUrl?.pathname);
               this.expire = null;
             }
             return error;
