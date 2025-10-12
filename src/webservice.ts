@@ -120,19 +120,38 @@ export class HTWebService {
     this.client = got.extend({
       prefixUrl: HTURL,
       cookieJar: this.cookieJar,
+      retry: {
+        statusCodes: [
+          401, // Unauthorized
+          408, // Request Timeout
+          429, // Too Many Requests
+          502, // Bad Gateway
+          503, // Service Unavailable
+          504, // Gateway Timeout
+        ],
+      },
       hooks: {
         beforeRequest: [
           async (options) => {
             if (!options.context?.onAuthenticate) {
-              // on current request, cookie not set by cookieJar. so set by ensure authenticate.
+              // on current request, cookie not set by cookieJar. should set on ensureAuthenticate method.
               await this.ensureAuthenticated(options);
+            }
+          },
+        ],
+        beforeRetry: [
+          async (error) => {
+            if (error.response?.statusCode === 401) {
+              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate', error.request?.requestUrl?.pathname);
+              this.expire = null;
+              await this.ensureAuthenticated();
             }
           },
         ],
         beforeError: [
           (error) => {
             if (error.response?.statusCode === 401) {
-              this.log.warn('HTWS: Unauthorized after request, need to re-authenticate', error);
+              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate', error.request?.requestUrl?.pathname);
               this.expire = null;
             }
             return error;
