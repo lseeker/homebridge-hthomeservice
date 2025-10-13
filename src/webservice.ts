@@ -263,19 +263,22 @@ export class HTWebService {
       return;
     }
 
-    await mutex.runExclusive(async () => {
+    const release = await mutex.acquire();
+    try {
       if (!this.isExpired()) {
         return;
       }
 
       this.log.info('HTWS: Re-authenticating: expired at', this.expire);
-      try {
-        await this.postLogin();
-        await this.postCtocToken();
-      } catch (e) {
-        this.log.error('HTWS: Error on authenticating', e);
-      }
-    });
+      await this.postLogin();
+      await this.postCtocToken();
+    } catch (e) {
+      this.log.error('HTWS: Error on authenticating', e);
+      throw new Error('HTWS: Failed to authenticate. Please check your hthomeservice account credentials.');
+    } finally {
+      release();
+    }
+
     await this.ensureAuthenticated();
     if (options) {
       options.headers.cookie = this.cookieJar.getCookieStringSync(HTURL);

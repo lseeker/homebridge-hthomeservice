@@ -97,14 +97,14 @@ export class HTFanAccessory {
     if (this.loading) {
       return;
     }
+    const release = await mutex.acquire();
     try {
-      await mutex.acquire();
       if (this.loading) {
         return;
       }
       this.loading = true;
     } finally {
-      mutex.release();
+      release();
     }
 
     try {
