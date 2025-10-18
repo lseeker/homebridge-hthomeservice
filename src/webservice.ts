@@ -279,13 +279,11 @@ export class HTWebService {
 
     const release = await mutex.acquire();
     try {
-      if (!this.isExpired()) {
-        return;
+      if (this.isExpired()) {
+        this.log.info('HTWS: Re-authenticating: expired at', this.expire);
+        await this.postLogin();
+        await this.postCtocToken();
       }
-
-      this.log.info('HTWS: Re-authenticating: expired at', this.expire);
-      await this.postLogin();
-      await this.postCtocToken();
     } catch (e) {
       this.log.error('HTWS: Error on authenticating', e);
       // 인증 실패 또는 접속 오류 시에는 잦은 재시도를 막기 위해 tryAuth 를 막아둠
@@ -295,7 +293,7 @@ export class HTWebService {
       release();
     }
 
-    await this.ensureAuthenticated();
+    await this.ensureAuthenticated(options);
     if (options) {
       options.headers.cookie = this.cookieJar.getCookieStringSync(HTURL);
     }
