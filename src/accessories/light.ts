@@ -46,7 +46,9 @@ export class HTLightAccessory {
 
   private updateValueByResponse(response: HTLightStateResponse) {
     const power = response.data.statusList[0]?.value === 'on';
-    this.onCharacteristic.updateValue(power);
-    this.log.info('Updated light on value', this.displayName, power);
+    if (this.onCharacteristic.value !== power) {
+      this.onCharacteristic.updateValue(power);
+      this.log.info('Updated light on value', this.displayName, power);
+    }
   }
 }

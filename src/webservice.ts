@@ -141,6 +141,7 @@ export class HTWebService {
   private client: Got;
   private log: Logging;
   private expire: Date | null = null;
+  private tryAuth = true;
 
   constructor(username: string, password: string, log: Logging) {
     this.username = encryptAES(username, HTSECRET);
@@ -189,6 +190,19 @@ export class HTWebService {
         ],
       },
     });
+
+    // 오랜만에 체크할 때 반응이 느린걸 해소하기 위해 30초에 한번씩 expire 체크하여 재인증 받아둠.
+    setInterval(() => {
+      if (this.expire === null) {
+        // expire 값이 없을 때는 패스, 접속 오류였을 경우 인증 재시도를 위해 tryAuth를 켜줌
+        this.tryAuth = true;
+        return;
+      }
+
+      if (this.expire < new Date()) {
+        this.ensureAuthenticated();
+      }
+    }, 30000);
   }
 
   private async postLogin() {
@@ -259,7 +273,7 @@ export class HTWebService {
   }
 
   private async ensureAuthenticated(options?: Options) {
-    if (!this.isExpired()) {
+    if (!this.isExpired() || !this.tryAuth) {
       return;
     }
 
@@ -274,6 +288,8 @@ export class HTWebService {
       await this.postCtocToken();
     } catch (e) {
       this.log.error('HTWS: Error on authenticating', e);
+      // 인증 실패 또는 접속 오류 시에는 잦은 재시도를 막기 위해 tryAuth 를 막아둠
+      this.tryAuth = false;
       throw new Error('HTWS: Failed to authenticate. Please check your hthomeservice account credentials.');
     } finally {
       release();
