@@ -91,11 +91,12 @@ export class HTHomeServicePlugin implements DynamicPlatformPlugin {
       const updatedAccessories: PlatformAccessory<HTDeviceContext>[] = [];
 
       response?.data.deviceList.forEach((device) => {
-        const uuid = this.api.hap.uuid.generate(`${device.deviceType}-${device.id}`);
-
         if (!SupportedDeviceTypes.includes(device.deviceType)) {
+          this.log.info('Not supported yet:', device.deviceType, device.deviceLocation, device.deviceName);
           return;
         }
+
+        const uuid = this.api.hap.uuid.generate(`${device.deviceType}-${device.id}`);
 
         const exists = this.cachedAccessories.get(uuid) as PlatformAccessory<HTDeviceContext>;
         if (exists) {
