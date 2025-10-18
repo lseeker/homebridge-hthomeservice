@@ -1,5 +1,5 @@
 import { Mutex } from 'async-mutex';
-import got, { type Got, type Options } from 'got';
+import got, { type Got, type NormalizedOptions } from 'got';
 import { type Logging } from 'homebridge';
 import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { CookieJar } from 'tough-cookie';
@@ -272,7 +272,7 @@ export class HTWebService {
     return false;
   }
 
-  private async ensureAuthenticated(options?: Options) {
+  private async ensureAuthenticated(options?: NormalizedOptions) {
     if (!this.isExpired() || !this.tryAuth) {
       return;
     }
