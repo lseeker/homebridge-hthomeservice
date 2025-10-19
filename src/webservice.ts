@@ -173,7 +173,7 @@ export class HTWebService {
         beforeRetry: [
           async (error) => {
             if (error.response?.statusCode === 401) {
-              this.log.warn('HTWS: Unauthorized on request, need to re-authenticate (retry)', error.request?.requestUrl?.pathname);
+              this.log.debug('HTWS: Unauthorized on request, need to re-authenticate (retry)', error.request?.requestUrl?.pathname);
               this.expire = null;
               await this.ensureAuthenticated();
             }
@@ -200,6 +200,7 @@ export class HTWebService {
       }
 
       if (this.expire < new Date()) {
+        this.log.info('HTWS: Reauthenticate by interval check');
         this.ensureAuthenticated();
       }
     }, 30000);
@@ -286,7 +287,7 @@ export class HTWebService {
       }
     } catch (e) {
       this.log.error('HTWS: Error on authenticating', e);
-      // 인증 실패 또는 접속 오류 시에는 잦은 재시도를 막기 위해 tryAuth 를 막아둠
+      // 인증 실패 또는 접속 오류 시에는 잦은 재시도를 막기 위해 tryAuth 변수로 처리 - interval로 30초마다 한번씩 활성화
       this.tryAuth = false;
       throw new Error('HTWS: Failed to authenticate. Please check your hthomeservice account credentials.');
     } finally {
