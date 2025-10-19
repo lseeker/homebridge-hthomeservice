@@ -133,41 +133,70 @@ export class HTFanAccessory {
     const power = response.data.statusList.find((status) => status.command === 'power')?.value ?? 'off';
     const wind = response.data.statusList.find((status) => status.command === 'wind')?.value ?? 'stop';
 
+    let newActiveValue = this.Characteristic.Active.INACTIVE;
+    let newCurrentValue = this.Characteristic.CurrentAirPurifierState.INACTIVE;
+    let newTargetValue = this.Characteristic.TargetAirPurifierState.MANUAL;
+    let newRotationSpeedValue = 0;
+
     if (power === 'on') {
-      this.activeCharacteristic.updateValue(this.Characteristic.Active.ACTIVE);
+      newActiveValue = this.Characteristic.Active.ACTIVE;
       if (wind === 'stop') {
-        this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.IDLE);
+        newCurrentValue = this.Characteristic.CurrentAirPurifierState.IDLE;
       } else {
-        this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.PURIFYING_AIR);
+        newCurrentValue = this.Characteristic.CurrentAirPurifierState.PURIFYING_AIR;
       }
     } else {
-      this.activeCharacteristic.updateValue(this.Characteristic.Active.INACTIVE);
-      this.currentStateCharacteristic.updateValue(this.Characteristic.CurrentAirPurifierState.INACTIVE);
+      newActiveValue = this.Characteristic.Active.ACTIVE;
+      newCurrentValue = this.Characteristic.CurrentAirPurifierState.INACTIVE;
     }
 
     switch (wind) {
     case 'stop':
-      this.rotationSpeedCharacteristic.updateValue(0);
-      if (this.activeCharacteristic.value === this.Characteristic.Active.ACTIVE) {
-        this.targetStateCharacteristic.updateValue(this.Characteristic.TargetAirPurifierState.AUTO);
+      newRotationSpeedValue = 0;
+      if (newActiveValue === this.Characteristic.Active.ACTIVE) {
+        newTargetValue = this.Characteristic.TargetAirPurifierState.AUTO;
       }
       break;
     case 'light':
-      this.rotationSpeedCharacteristic.updateValue(30);
+      newRotationSpeedValue = 30;
       break;
     case 'mid':
-      this.rotationSpeedCharacteristic.updateValue(60);
+      newRotationSpeedValue = 60;
       break;
     case 'pow':
-      this.rotationSpeedCharacteristic.updateValue(100);
+      newRotationSpeedValue = 100;
       break;
     }
 
-    this.log.info('Updated air purifier values',
-      this.displayName,
-      this.activeCharacteristic.value,
-      this.currentStateCharacteristic.value,
-      this.targetStateCharacteristic.value,
-      this.rotationSpeedCharacteristic.value);
+    let didUpdate = false;
+
+    if (this.activeCharacteristic.value !== newActiveValue) {
+      this.activeCharacteristic.updateValue(newActiveValue);
+      didUpdate = true;
+    }
+
+    if (this.targetStateCharacteristic.value !== newTargetValue) {
+      this.targetStateCharacteristic.updateValue(newTargetValue);
+      didUpdate = true;
+    }
+
+    if (this.currentStateCharacteristic.value !== newCurrentValue) {
+      this.currentStateCharacteristic.updateValue(newCurrentValue);
+      didUpdate = true;
+    }
+    
+    if (this.rotationSpeedCharacteristic.value !== newRotationSpeedValue) {
+      this.rotationSpeedCharacteristic.updateValue(newRotationSpeedValue);
+      didUpdate = true;
+    }
+
+    if (didUpdate) {
+      this.log.info('Updated air purifier values',
+        this.displayName,
+        this.activeCharacteristic.value,
+        this.currentStateCharacteristic.value,
+        this.targetStateCharacteristic.value,
+        this.rotationSpeedCharacteristic.value);
+    }
   }
 }
